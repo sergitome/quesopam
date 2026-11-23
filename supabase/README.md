@@ -18,8 +18,8 @@ Per posar en marxa la base de dades abans de configurar GitHub Actions, executa 
 ```powershell
 pnpm dlx supabase login
 pnpm dlx supabase link --project-ref racbiakimcxupfrnioyi
-pnpm dlx supabase db push --dry-run
-pnpm dlx supabase db push
+pnpm dlx supabase db push --remote --dry-run
+pnpm dlx supabase db push --remote
 ```
 
 ## Donar accés a una persona
