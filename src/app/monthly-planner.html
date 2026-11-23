@@ -1,0 +1,49 @@
+<header><h1>Menú mensual</h1></header>
+@if (!configured) {
+  <p>Falta connectar aquest web amb el projecte de Supabase.</p>
+} @else if (!user()) {
+  <form class="panel login" (ngSubmit)="login()">
+    <h2>Inicia sessió</h2>
+    <label>Correu electrònic<input type="email" name="email" autocomplete="username" [(ngModel)]="email" required></label>
+    <label>Contrasenya<input type="password" name="password" autocomplete="current-password" [(ngModel)]="password" required></label>
+    <button [disabled]="busy() || !email || !password">Entra</button>
+  </form>
+} @else {
+  <div class="toolbar"><span>{{ user()?.email }}</span><button class="quiet" (click)="logout()" [disabled]="busy()">Tanca la sessió</button></div>
+  <section class="panel">
+    <label>Mes del menú<input type="month" [ngModel]="month()" [disabled]="busy()" (ngModelChange)="month.set($event); message.set(''); loadMonth()"></label>
+    <fieldset><legend>Dies que sopem a casa</legend>
+      @for (day of weekdays; track day.id) {
+        <label class="day"><input type="checkbox" [checked]="selectedDays().includes(day.id)" [disabled]="busy() || (selectedDays().length === 1 && selectedDays()[0] === day.id)" (change)="toggleDay.emit(day.id)">{{ day.short }}</label>
+      }
+    </fieldset>
+    <button (click)="distribute()" [disabled]="busy() || !month() || !recipes().length">Distribueix les receptes</button>
+    @if (calendar().length) {
+      <ul>@for (entry of calendar(); track entry.date) {
+        <li><time [attr.datetime]="entry.date">{{ entry.label }}</time>
+        @if (entry.recipe; as recipe) {<button class="quiet" (click)="openRecipe.emit(recipe)">{{ recipe.name }}</button>}</li>
+      }</ul>
+    } @else {<p>Cap sopar planificat per a aquest mes.</p>}
+  </section>
+  <section class="panel"><h2>Receptari compartit</h2>
+    @if (editor()) {<button (click)="writing.set(!writing())" [disabled]="busy()">{{ writing() ? 'Tanca el formulari' : '+ Nova recepta' }}</button>}
+    @if (editor() && writing()) {
+      <form #recipeForm="ngForm" (ngSubmit)="publish()">
+        <label>Nom de la recepta<input required name="name" [(ngModel)]="draft.name"></label>
+        <label>Emoji<input name="emoji" [(ngModel)]="draft.emoji"></label>
+        <label>Temps en minuts<input required type="number" min="1" name="minutes" [(ngModel)]="draft.minutes"></label>
+        <label>Racions base<input required type="number" min="1" name="servings" [(ngModel)]="draft.servings"></label>
+        <label>Etiquetes separades per comes<input name="tags" [(ngModel)]="draft.tags"></label>
+        <label>Ingredients, un per línia (nom | quantitat | unitat | categoria)<textarea rows="4" name="ingredients" required placeholder="Tomàquet | 2 | u | Fruita i verdura" [(ngModel)]="draft.ingredients"></textarea></label>
+        <small>Categories disponibles · {{ categories.join(' · ') }}</small>
+        <label>Preparació, un pas per línia<textarea rows="3" name="steps" required [(ngModel)]="draft.instructions"></textarea></label>
+        <button [disabled]="busy() || recipeForm.invalid">Publica la recepta</button>
+      </form>
+    }
+    <div class="catalog">@for (recipe of recipes(); track recipe.id) {
+      <button class="quiet" (click)="openRecipe.emit(recipe)">{{ recipe.emoji }} {{ recipe.name }}</button>
+    }</div>
+  </section>
+}
+@if (message()) {<p role="status">{{ message() }}</p>}
+@if (error()) {<p role="alert">{{ error() }}</p>@if (user()) {<button class="quiet" (click)="loadAccount()">Actualitza les dades</button>}}
