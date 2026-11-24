@@ -146,9 +146,11 @@ export class MonthlyPlanner implements OnInit {
   }
 
   startRecipe(recipe?: Recipe) {
+    if (!this.editor() || this.busy()) return;
     this.draft = recipe ? structuredClone(recipe) : newRecipe();
     this.sourceUrl = '';
     this.writing.set(true);
+    requestAnimationFrame(() => document.getElementById('recipe-name')?.focus());
     this.error.set('');
     this.message.set('');
   }

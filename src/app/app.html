@@ -24,7 +24,16 @@
       <section class="shopping-cta"><div class="cta-icon">🧺</div><div><p class="eyebrow">Tot a punt per {{ dayLabel(shoppingDay()) }}</p><h2>La llista de la compra ja està feta</h2><p>{{ shoppingItems().length }} ingredients agrupats i calculats per a {{ servings() }} {{ servings() === 1 ? 'persona' : 'persones' }}.</p></div><button class="dark" (click)="activeTab.set('shopping')">Veure la llista</button></section>
     }
     @if (activeTab() === 'recipes') {
-      <section class="hero compact"><div><p class="eyebrow">El teu receptari</p><h1>Receptes per repetir</h1><p>Consulta els ingredients o afegeix les receptes que més us agraden.</p></div><div class="hero-actions"><button class="secondary" (click)="activeTab.set('month')">Obre el receptari compartit</button>@if (monthly()?.editor()) {<button class="primary" (click)="editRecipe()">Nova recepta</button>}</div></section>
+      <section class="hero compact">
+        <div><p class="eyebrow">El teu receptari</p><h1>Receptes per repetir</h1>
+          @if (!monthly()?.editor()) {<p>{{ monthly()?.user() ? 'Cal el rol d’editor per afegir o importar receptes.' : 'Inicia sessió amb un compte editor per afegir o importar receptes.' }}</p>}
+        </div>
+        <div class="hero-actions">
+          <button class="secondary" (click)="activeTab.set('month')">Obre el receptari compartit</button>
+          <button class="secondary" (click)="openImport()" [disabled]="!monthly()?.editor() || monthly()?.busy()">Importa una recepta</button>
+          <button class="primary" (click)="editRecipe()" [disabled]="!monthly()?.editor() || monthly()?.busy()">Nova recepta</button>
+        </div>
+      </section>
       <section class="recipe-grid">@for (recipe of recipes(); track recipe.id) {<article class="recipe-card" (click)="selectedRecipe.set(recipe)" tabindex="0" (keydown.enter)="selectedRecipe.set(recipe)"><span class="recipe-emoji">{{ recipe.emoji }}</span><div class="recipe-copy"><div class="meta"><span>{{ recipe.minutes }} min</span><span>{{ recipe.ingredients.length }} ingredients</span></div><h2>{{ recipe.name }}</h2><div class="tags">@for (tag of recipe.tags; track tag) {<span>{{ tag }}</span>}</div></div></article>}</section>
     }
     @if (activeTab() === 'shopping') {

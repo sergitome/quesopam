@@ -13,7 +13,7 @@ export const newRecipe = (): Recipe => ({
   template: `
   <form #form="ngForm" (ngSubmit)="submit()">
     <fieldset class="fields" [disabled]="busy()">
-      <label>Nom de la recepta<input required pattern=".*\\S.*" name="name" [(ngModel)]="draft().name"></label>
+      <label>Nom de la recepta<input id="recipe-name" required pattern=".*\\S.*" name="name" [(ngModel)]="draft().name"></label>
       <label>Emoji<input name="emoji" [(ngModel)]="draft().emoji"></label>
       <label>Temps en minuts<input required type="number" min="1" name="minutes" [(ngModel)]="draft().minutes"></label>
       <label>Racions base<input required type="number" min="1" name="servings" [(ngModel)]="draft().servings"></label>

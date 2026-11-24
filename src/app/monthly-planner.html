@@ -26,15 +26,17 @@
     } @else {<p>Cap sopar planificat per a aquest mes.</p>}
   </section>
   <section class="panel"><h2>Receptari compartit</h2>
-    @if (editor() && !writing()) {
+    @if (editor()) {
+      <button type="button" (click)="startRecipe()" [disabled]="busy()">Nova recepta</button>
       <form (ngSubmit)="importRecipe()" #urlForm="ngForm">
-        <label>Enllaç de la recepta<input type="url" name="source" placeholder="https://…" required [(ngModel)]="sourceUrl"></label>
-        <button [disabled]="busy() || urlForm.invalid">Importa des del web</button>
+        <label>Enllaç de la recepta<input id="recipe-source" type="url" name="source" placeholder="https://…" required [(ngModel)]="sourceUrl"></label>
+        <button [disabled]="busy() || urlForm.invalid">Importa una recepta</button>
       </form>
-      <button (click)="startRecipe()" [disabled]="busy()">+ Nova recepta</button>
     }
     @if (editor() && writing()) {
-      <app-recipe-editor [draft]="draft" [busy]="busy()" (saved)="publish($event)" (cancel)="writing.set(false)" />
+      @for (currentDraft of [draft]; track currentDraft) {
+        <app-recipe-editor [draft]="currentDraft" [busy]="busy()" (saved)="publish($event)" (cancel)="writing.set(false)" />
+      }
     }
     <ul>@for (recipe of recipes(); track recipe.id) {
       <li><button class="quiet" (click)="openRecipe.emit(recipe)">{{ recipe.emoji }} {{ recipe.name }}</button>

@@ -55,6 +55,10 @@ export class App {
     this.activeTab.set('month');
     this.monthly()?.startRecipe(recipe);
   }
+  openImport() {
+    this.activeTab.set('month');
+    requestAnimationFrame(() => document.getElementById('recipe-source')?.focus());
+  }
   async deleteRecipe(recipe: Recipe) {
     this.selectedRecipe.set(null);
     this.activeTab.set('month');
