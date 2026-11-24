@@ -1,24 +1,26 @@
 import { Component, DestroyRef, OnInit, computed, inject, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
-import { CATEGORIES, DAYS, type Category, type DayId, type Ingredient, type Recipe } from './recipes';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
+import { DAYS, type DayId, type Recipe } from './recipes';
 import { supabaseConfig } from './supabase-config';
+
+import { newRecipe, RecipeEditor } from './recipe-editor';
+import { parseRecipePage } from './recipe-import';
 
 let sharedClient: SupabaseClient | undefined;
 const today = new Date();
 const currentMonth = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0');
-const blankRecipe = () => ({ name: '', minutes: 30, servings: 4, ingredients: '', instructions: '', emoji: '🍽️', tags: '' });
 
 @Component({
-  selector: 'app-monthly-planner', imports: [FormsModule],
+  selector: 'app-monthly-planner', imports: [FormsModule, RecipeEditor],
   templateUrl: './monthly-planner.html', styleUrl: './monthly-planner.css'
 })
 export class MonthlyPlanner implements OnInit {
   selectedDays = input.required<DayId[]>();
   toggleDay = output<DayId>();
   openRecipe = output<Recipe>();
+  catalogLoaded = output<Recipe[] | null>();
   readonly weekdays = DAYS;
-  readonly categories = CATEGORIES;
   readonly configured = !!supabaseConfig.url && !!supabaseConfig.publishableKey;
   private db?: SupabaseClient;
   private destroy = inject(DestroyRef);
@@ -30,33 +32,39 @@ export class MonthlyPlanner implements OnInit {
   readonly message = signal('');
   readonly error = signal('');
   readonly month = signal(currentMonth);
-  readonly recipes = signal<Recipe[]>([]);
+  private readonly catalog = signal<(Recipe & {arxivada: boolean})[]>([]);
+  readonly recipes = computed(() => this.catalog().filter(recipe => !recipe.arxivada));
   readonly entries = signal<{dia: string; recepta_id: string}[]>([]);
   readonly calendar = computed(() => this.entries().map(entry => ({
     date: entry.dia,
     label: new Date(entry.dia + 'T12:00:00').toLocaleDateString('ca', {weekday:'long', day:'numeric', month:'long'}),
-    recipe: this.recipes().find(recipe => recipe.id === entry.recepta_id)
+    recipe: this.catalog().find(recipe => recipe.id === entry.recepta_id)
   })));
   email = '';
   password = '';
-  draft = blankRecipe();
+  draft = newRecipe();
+  sourceUrl = '';
   writing = signal(false);
 
-  ngOnInit() {
+  async ngOnInit() {
     if (!this.configured) return;
+    const { createClient } = await import('@supabase/supabase-js');
+    if (this.destroy.destroyed) return;
     this.db = sharedClient ??= createClient(supabaseConfig.url, supabaseConfig.publishableKey);
     const { data } = this.db.auth.onAuthStateChange((_event, session) => {
       const user = session?.user ?? null;
       if (user?.id === this.user()?.id) return;
       this.accountVersion++;
       this.user.set(user);
-      this.recipes.set([]);
+      this.catalog.set([]);
+      this.catalogLoaded.emit(null);
       this.entries.set([]);
       this.editor.set(false);
       this.message.set('');
       this.error.set('');
       this.writing.set(false);
-      this.draft = blankRecipe();
+      this.draft = newRecipe();
+      this.sourceUrl = '';
       if (user) setTimeout(() => { if (!this.destroy.destroyed && this.user()?.id === user.id) void this.loadAccount(); });
     });
     this.destroy.onDestroy(() => { this.accountVersion++; data.subscription.unsubscribe(); });
@@ -90,13 +98,14 @@ export class MonthlyPlanner implements OnInit {
     try {
       const [profile, catalog] = await Promise.all([
         this.db.from('usuaris').select('rol').eq('id', user.id).single(),
-        this.db.from('receptes').select('id,name,emoji,minutes,servings,tags,instructions,ingredients(name,amount,unit,category,posicio)').order('name')
+        this.db.from('receptes').select('id,arxivada,name,emoji,minutes,servings,tags,instructions,ingredients(name,amount,unit,category,posicio)').order('name')
       ]);
       if (version !== this.accountVersion) return;
       if (profile.error) throw profile.error;
       if (catalog.error) throw catalog.error;
       this.editor.set(profile.data.rol === 'editor');
-      this.recipes.set(catalog.data.map(recipe => ({ ...recipe, ingredients: recipe.ingredients.sort((a,b) => a.posicio - b.posicio) })));
+      this.catalog.set(catalog.data.map(recipe => ({ ...recipe, ingredients: recipe.ingredients.sort((a,b) => a.posicio - b.posicio) })));
+      this.catalogLoaded.emit(this.recipes());
       await this.loadMonth();
     } catch (err) { if (version === this.accountVersion) this.report(err); }
   }
@@ -136,28 +145,68 @@ export class MonthlyPlanner implements OnInit {
     } catch (err) { this.report(err); } finally { this.busy.set(false); }
   }
 
-  async publish() {
-    if (!this.db || !this.editor() || this.busy()) return;
+  startRecipe(recipe?: Recipe) {
+    this.draft = recipe ? structuredClone(recipe) : newRecipe();
+    this.sourceUrl = '';
+    this.writing.set(true);
     this.error.set('');
     this.message.set('');
+  }
+
+  async importRecipe() {
+    if (!this.db || !this.editor() || this.busy()) return;
+    const version = this.accountVersion;
     this.busy.set(true);
+    this.error.set('');
+    this.message.set('');
     try {
-      const ingredients: Ingredient[] = this.draft.ingredients.split('\n').filter(line => line.trim()).map((line, idx) => {
-        const [name, raw, unit, category, extra] = line.split('|').map(value => value.trim());
-        const amount = Number(raw?.replace(',', '.'));
-        if (!name || !Number.isFinite(amount) || amount <= 0 || !unit || !CATEGORIES.includes(category as Category) || extra !== undefined)
-          throw new Error('Revisa l’ingredient de la línia ' + (idx + 1) + '.');
-        return {name, amount, unit, category: category as Category};
-      });
-      if (!ingredients.length) throw new Error('Afegeix almenys un ingredient.');
-      const {error} = await this.db.rpc('publica_recepta', {plat: {...this.draft, ingredients,
-        tags: this.draft.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        instructions: this.draft.instructions.split('\n').map(step => step.trim()).filter(Boolean)}});
+      const url = new URL(this.sourceUrl.trim());
+      if (url.protocol !== 'https:' || url.username || url.password || url.port) throw new Error('Introdueix un enllaç HTTPS públic.');
+      const {data, error} = await this.db.functions.invoke('importa-recepta', {body: {url: url.href}});
       if (error) throw error;
-      this.draft = blankRecipe();
+      if (data.error) throw new Error(data.error);
+      let html = data.html;
+      if (data.direct) {
+        try {
+          const response = await fetch(url, {credentials: 'omit', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(12000)});
+          if (!response.ok) throw new Error();
+          html = await response.text();
+        } catch { throw new Error('Aquest web no permet llegir la recepta des del navegador.'); }
+      }
+      if (version !== this.accountVersion) return;
+      this.draft = parseRecipePage(html);
+      this.writing.set(true);
+      this.message.set('Revisa les quantitats, les unitats, les categories i els passos abans de publicar.');
+    } catch (err) { if (version === this.accountVersion) this.report(err); }
+    finally { this.busy.set(false); }
+  }
+
+  async publish(recipe: Recipe) {
+    await this.changeCatalog(recipe.id ? 'modifica_recepta' : 'publica_recepta',
+      recipe.id ? {recepta: recipe.id, plat: recipe} : {plat: recipe},
+      recipe.id ? 'Canvis desats.' : 'Recepta publicada.');
+  }
+
+  async remove(recipe: Recipe) {
+    if (window.confirm('Vols esborrar «' + recipe.name + '» del receptari compartit?'))
+      await this.changeCatalog('esborra_recepta', {recepta: recipe.id}, 'Recepta esborrada.');
+  }
+
+  private async changeCatalog(operation: string, params: Record<string, unknown>, message: string) {
+    if (!this.db || !this.editor() || this.busy()) return;
+    const version = this.accountVersion;
+    this.busy.set(true);
+    this.error.set('');
+    this.message.set('');
+    try {
+      const {error} = await this.db.rpc(operation, params);
+      if (version !== this.accountVersion) return;
+      if (error) throw error;
       this.writing.set(false);
-      this.message.set('Recepta publicada.');
+      this.sourceUrl = '';
+      this.message.set(message);
       await this.loadAccount();
-    } catch (err) { this.report(err); } finally { this.busy.set(false); }
+    } catch (err) { if (version === this.accountVersion) this.report(err); }
+    finally { this.busy.set(false); }
   }
 }

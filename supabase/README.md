@@ -1,6 +1,6 @@
 # Connectar el planificador amb Supabase
 
-La web ja té el Project URL i la clau pública a `src/app/supabase-config.ts`. L’accés amb correu utilitza Supabase Auth. La pestanya **Menú mensual** carrega el receptari compartit i el calendari privat del compte. El planificador setmanal i les receptes antigues continuen disponibles al navegador.
+La web ja té el Project URL i la clau pública a `src/app/supabase-config.ts`. L’accés amb correu utilitza Supabase Auth. La pestanya **Menú mensual** carrega el receptari compartit i el calendari privat del compte. El planificador setmanal i la pestanya Receptes fan servir el mateix catàleg de Supabase. El navegador conserva les preferències i els identificadors dels sopars planificats.
 
 ## Crear les taules i automatitzar els canvis
 
@@ -33,3 +33,11 @@ pnpm dlx supabase db push --remote
 Tria el mes i marca els dies de la setmana. Prem **Distribueix les receptes**. L’aplicació reparteix tot el receptari en ordre aleatori i fa servir cada plat abans de repetir-lo. Si ja hi ha sopars aquell mes, et demana confirmació abans de substituir tot el mes amb els dies seleccionats. Cancel·lar conserva el calendari anterior.
 
 [Documentació de Supabase sobre migracions i GitHub Actions](https://supabase.com/docs/guides/deployment/managing-environments)
+
+## Importar i editar receptes
+
+A **Menú mensual → Receptari compartit**, un editor pot enganxar un enllaç HTTPS i prémer **Importa des del web**. El lector extreu ingredients i passos de les pàgines amb dades de recepta JSON-LD o microdades. Revisa les quantitats, les unitats, les categories, el temps i les racions abans de publicar. Cada ingredient es desa a `ingredients` amb la seva posició i la referència a la recepta. Els passos es desen en ordre a `receptes.instructions`.
+
+El flux de GitHub aplica la migració d’edició i desplega la funció `importa-recepta`. La funció comprova el compte i el rol d’editor. Pot descarregar directament els dominis enumerats al fitxer de la funció. Pots afegir dominis de confiança al secret `RECIPE_HOSTS`, separats per comes. Per a altres dominis, el navegador prova la lectura directa si el web d’origen permet CORS.
+
+Esborrar una recepta compartida la retira del catàleg i dels repartiments futurs. Els sopars mensuals que ja l’utilitzen en conserven la fitxa.

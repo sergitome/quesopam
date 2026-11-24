@@ -26,23 +26,23 @@
     } @else {<p>Cap sopar planificat per a aquest mes.</p>}
   </section>
   <section class="panel"><h2>Receptari compartit</h2>
-    @if (editor()) {<button (click)="writing.set(!writing())" [disabled]="busy()">{{ writing() ? 'Tanca el formulari' : '+ Nova recepta' }}</button>}
-    @if (editor() && writing()) {
-      <form #recipeForm="ngForm" (ngSubmit)="publish()">
-        <label>Nom de la recepta<input required name="name" [(ngModel)]="draft.name"></label>
-        <label>Emoji<input name="emoji" [(ngModel)]="draft.emoji"></label>
-        <label>Temps en minuts<input required type="number" min="1" name="minutes" [(ngModel)]="draft.minutes"></label>
-        <label>Racions base<input required type="number" min="1" name="servings" [(ngModel)]="draft.servings"></label>
-        <label>Etiquetes separades per comes<input name="tags" [(ngModel)]="draft.tags"></label>
-        <label>Ingredients, un per línia (nom | quantitat | unitat | categoria)<textarea rows="4" name="ingredients" required placeholder="Tomàquet | 2 | u | Fruita i verdura" [(ngModel)]="draft.ingredients"></textarea></label>
-        <small>Categories disponibles · {{ categories.join(' · ') }}</small>
-        <label>Preparació, un pas per línia<textarea rows="3" name="steps" required [(ngModel)]="draft.instructions"></textarea></label>
-        <button [disabled]="busy() || recipeForm.invalid">Publica la recepta</button>
+    @if (editor() && !writing()) {
+      <form (ngSubmit)="importRecipe()" #urlForm="ngForm">
+        <label>Enllaç de la recepta<input type="url" name="source" placeholder="https://…" required [(ngModel)]="sourceUrl"></label>
+        <button [disabled]="busy() || urlForm.invalid">Importa des del web</button>
       </form>
+      <button (click)="startRecipe()" [disabled]="busy()">+ Nova recepta</button>
     }
-    <div class="catalog">@for (recipe of recipes(); track recipe.id) {
-      <button class="quiet" (click)="openRecipe.emit(recipe)">{{ recipe.emoji }} {{ recipe.name }}</button>
-    }</div>
+    @if (editor() && writing()) {
+      <app-recipe-editor [draft]="draft" [busy]="busy()" (saved)="publish($event)" (cancel)="writing.set(false)" />
+    }
+    <ul>@for (recipe of recipes(); track recipe.id) {
+      <li><button class="quiet" (click)="openRecipe.emit(recipe)">{{ recipe.emoji }} {{ recipe.name }}</button>
+      @if (editor() && !writing()) {
+        <button [disabled]="busy()" (click)="startRecipe(recipe)">Edita</button>
+        <button class="quiet" [disabled]="busy()" (click)="remove(recipe)">Esborra</button>
+      }</li>
+    }</ul>
   </section>
 }
 @if (message()) {<p role="status">{{ message() }}</p>}
